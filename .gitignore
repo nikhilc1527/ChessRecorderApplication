@@ -1,0 +1,9 @@
+__pycache__
+ssh_aws
+my_key.pem
+
+valid
+train
+test
+
+model_*
