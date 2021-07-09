@@ -1,3 +1,4 @@
+import PIL.ImageShow
 from engine import train_one_epoch, evaluate
 import math
 import numpy as np
@@ -21,14 +22,23 @@ from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 import cv2
 
 
+class MyViewer(PIL.ImageShow.UnixViewer):
+    def get_command_ex(self, file, **options):
+        command = executable = "feh"
+        return command, executable
+
+
+PIL.ImageShow.register(MyViewer, -1)
+
+
 class ChessDataset(torch.utils.data.Dataset):
-    def __init__(self, root, transforms=None):
+    def __init__(self, root, annotations_name, transforms=None):
         self.root = root
         self.transforms = transforms
         # load all image files, sorting them to
         # ensure that they are aligned
         self.imgs = list(sorted(glob.glob(os.path.join(root, "*.jpg"))))
-        with open(os.path.join(root, "_annotations.coco.json"), 'r') as myfile:
+        with open(os.path.join(root, annotations_name), 'r') as myfile:
             data = myfile.read()
 
         self.obj = json.loads(data)
@@ -65,8 +75,8 @@ class ChessDataset(torch.utils.data.Dataset):
 
         target = {}
         target["boxes"] = torch.as_tensor([([ann['bbox'][0], ann['bbox'][1],
-                                             ann['bbox'][0]+ann['bbox'][2],
-                                             ann['bbox'][1]+ann['bbox'][3]])
+                                             ann['bbox'][0] + ann['bbox'][2],
+                                             ann['bbox'][1] + ann['bbox'][3]])
                                            for ann in self.annotations
                                            [ann_range.start:ann_range.stop]],
                                           dtype=torch.float32)
@@ -82,8 +92,7 @@ class ChessDataset(torch.utils.data.Dataset):
             ann['iscrowd'] for ann in self.annotations
             [ann_range.start:ann_range.stop]), dtype=torch.int8)
         target["masks"] = torch.as_tensor(
-            [[[False] * img.height] * img.width] *
-            len(ann_range), dtype=torch.uint8)
+            [[[False] * img.height] * img.width] * len(ann_range), dtype=torch.uint8)
 
         if self.transforms is not None:
             img, target = self.transforms(img, target)
@@ -91,7 +100,7 @@ class ChessDataset(torch.utils.data.Dataset):
         return img, target
 
     def __len__(self):
-        return len(self.imgs)
+        return len(self.obj['images'])
 
     def get_path(self, idx):
         img_obj = self.obj['images'][self.annotations[idx]['image_id']]
@@ -125,6 +134,7 @@ def get_instance_segmentation_model(num_classes):
     # replace the pre-trained head with a new one
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     model.roi_heads.position_predictor = MLP()
+    # model.roi_heads.box_predictor2 = FastRCNNPredictor(in_features, num_classes2)
 
     # now get the number of input features for the mask classifier
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
@@ -149,8 +159,10 @@ def get_transform(train):
 
 
 # use our dataset and defined transformations
-dataset = ChessDataset('train/', get_transform(train=True))
-dataset_test = ChessDataset('valid/', get_transform(train=False))
+dataset = ChessDataset('train/', '_annotations.coco.json', get_transform(train=True))
+dataset_test = ChessDataset('valid/', '_annotations.coco.json', get_transform(train=False))
+char_dataset = ChessDataset('train/', '_characters_annotations.coco.json', get_transform(train=True))
+char_dataset_test = ChessDataset('train/', '_characters_annotations.coco.json', get_transform(train=False))
 # PennFudanPed
 # dataset = PennFudanDataset('PennFudanPed', get_transform(train=True))
 # dataset_test = PennFudanDataset('PennFudanPed', get_transform(train=False))
@@ -159,8 +171,14 @@ dataset_test = ChessDataset('valid/', get_transform(train=False))
 torch.manual_seed(1)
 indices = torch.randperm(len(dataset)).tolist()
 indices_test = torch.randperm(len(dataset_test)).tolist()
-dataset_ = torch.utils.data.Subset(dataset, indices[:len(indices)//2])
+dataset_ = torch.utils.data.Subset(dataset, indices[:len(indices) // 2])
 dataset_test_ = torch.utils.data.Subset(dataset_test, indices_test)
+
+torch.manual_seed(2)
+char_indices = torch.randperm(len(char_dataset)).tolist()
+char_indices_test = torch.randperm(len(char_dataset_test)).tolist()
+char_dataset_ = torch.utils.data.Subset(char_dataset, char_indices[1:])
+char_dataset_test_ = torch.utils.data.Subset(char_dataset_test, char_indices_test)
 
 # define training and validation data loaders
 data_loader = torch.utils.data.DataLoader(
@@ -171,20 +189,37 @@ data_loader_test = torch.utils.data.DataLoader(
     dataset_test_, batch_size=1, shuffle=False, num_workers=0,
     collate_fn=utils.collate_fn)
 
-device = torch.device(
-    'cuda') if torch.cuda.is_available() else torch.device('cpu')
+char_data_loader = torch.utils.data.DataLoader(
+    char_dataset_, batch_size=2, shuffle=True, num_workers=0,
+    collate_fn=utils.collate_fn)
+
+char_data_loader_test = torch.utils.data.DataLoader(
+    char_dataset_test_, batch_size=1, shuffle=False, num_workers=0,
+    collate_fn=utils.collate_fn)
+
+# device = torch.device(
+#     'cuda') if torch.cuda.is_available() else torch.device('cpu')
+device = torch.device('cpu')
+# device = torch.device('cuda')
 
 # our dataset has two classes only - background and person
 num_classes = 14
+num_classes2 = 18
 
 # get the model using our helper function
 model = get_instance_segmentation_model(num_classes)
+model2 = get_instance_segmentation_model(num_classes2)
 # move model to the right device
 model.to(device)
+model2.to(device)
 
 # construct an optimizer
 params = [p for p in model.parameters() if p.requires_grad]
 optimizer = torch.optim.SGD(params, lr=0.005,
+                            momentum=0.9, weight_decay=0.0005)
+
+params2 = [p for p in model2.parameters() if p.requires_grad]
+optimizer2 = torch.optim.SGD(params2, lr=0.005,
                             momentum=0.9, weight_decay=0.0005)
 
 # and a learning rate scheduler which decreases the learning rate by
@@ -193,36 +228,44 @@ lr_scheduler = torch.optim.lr_scheduler.StepLR(optimizer,
                                                step_size=3,
                                                gamma=0.1)
 
+lr_scheduler2 = torch.optim.lr_scheduler.StepLR(optimizer2,
+                                               step_size=3,
+                                               gamma=0.1)
+
 # number of epochs to train for
 num_epochs = 20
-if os.path.isfile('./model_{}epoch_statedict'.format(num_epochs)):
-    model.load_state_dict(torch.load(
-        './model_{}epoch_statedict'.format(num_epochs), map_location=device))
-else:
+# if os.path.isfile('./model_{}epoch_statedict'.format(num_epochs)):
+model.load_state_dict(torch.load(
+    './model_{}epoch_statedict'.format(num_epochs), map_location=device))
 
-    for epoch in range(num_epochs):
-        # train for one epoch, printing every 10 iterations
-        train_one_epoch(model, optimizer, data_loader,
-                        device, epoch, print_freq=10)
-        # update the learning rate
-        lr_scheduler.step()
-        # evaluate on the test dataset
-        evaluate(model, data_loader_test, device=device)
+num_epochs2 = 3
+model2.load_state_dict(torch.load(
+    './char_model_{}epoch_statedict'.format(num_epochs2), map_location=device))
+# else:
+# for epoch in range(num_epochs2):
+#     # train for one epoch, printing every 10 iterations
+#     train_one_epoch(model2, optimizer2, char_data_loader,
+#                     device, epoch, print_freq=1)
+#     # update the learning rate
+#     lr_scheduler2.step()
+#     # evaluate on the test dataset
+#     evaluate(model2, char_data_loader_test, device=device)
 
+torch.save(model2.state_dict(), 'char_model_{}epoch_statedict'.format(num_epochs2))
 
-ind = 4
-for i in range(len(dataset_test)):
-    print('{}: {}'.format(i, len(dataset_test[i][1]['labels'])))
-    if len(dataset_test[i][1]['labels']) > len(dataset_test[ind][1]['labels']):
-        ind = i
-print(ind)
+ind = 1
+# for i in range(len(char_dataset_test)):
+#     print('{}: {}'.format(i, len(char_dataset_test[i][1]['labels'])))
+#     if len(char_dataset_test[i][1]['labels']) > len(char_dataset_test[ind][1]['labels']):
+#         ind = i
+# print(ind)
 
 # pick one image from the test set
-img, obj = dataset_test[ind]
+img, obj = char_dataset_test[ind]
 # put the model in evaluation mode
-model.eval()
+model2.eval()
 with torch.no_grad():
-    prediction = model([img.to(device)])
+    prediction = model2([img.to(device)])
 
 
 def get_name(categories, id):
@@ -237,10 +280,10 @@ imgdraw = ImageDraw.Draw(image)
 for bbox, label in zip(obj['boxes'], obj['labels']):
     shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
     imgdraw.rectangle(shape)
-    imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
+    imgdraw.text((bbox[0], bbox[1]), get_name(char_dataset.categories, label))
 
 
-img_path = dataset_test.get_path(ind)
+img_path = char_dataset_test.get_path(ind)
 
 
 def pil_to_cv(img):
@@ -330,14 +373,14 @@ plt.scatter(x, y)
 
 for line in h_lines:
     x_vals = [0, 500]
-    y_vals = [(line[0] - x_vals[0]*math.cos(line[1]))/math.sin(line[1]),
-              (line[0] - x_vals[1]*math.cos(line[1]))/math.sin(line[1])]
+    y_vals = [(line[0] - x_vals[0] * math.cos(line[1])) / math.sin(line[1]),
+              (line[0] - x_vals[1] * math.cos(line[1])) / math.sin(line[1])]
     # plt.plot(x_vals, y_vals)
 
 for line in v_lines:
     y_vals = [0, 500]
-    x_vals = [(line[0] - y_vals[0]*math.sin(line[1]))/math.cos(line[1]),
-              (line[0] - y_vals[1]*math.sin(line[1]))/math.cos(line[1])]
+    x_vals = [(line[0] - y_vals[0] * math.sin(line[1])) / math.cos(line[1]),
+              (line[0] - y_vals[1] * math.sin(line[1])) / math.cos(line[1])]
     # plt.plot(x_vals, y_vals)
 
 # plt.show()
@@ -387,8 +430,7 @@ for bbox, label, score in zip(prediction[0]['boxes'], prediction[0]['labels'],
     new_piece = Piece(label=label, bbox=bbox, corner_bl=closest_bl, corner_br=closest_br, score=score)
     pieces.append(new_piece)
 
-print('hehehehe')
-
+# filter out all of same piece/different labels, keeping only maximum score for each square
 piece_dict = {}
 for i in range(len(pieces)):
     piece = pieces[i]
@@ -407,16 +449,17 @@ for piece in piece_dict:
     print(piece)
 
 for piece in pieces:
-    imgdraw.ellipse((piece.corner_bl[0], piece.corner_bl[1],
-                     piece.corner_bl[0] + 2, piece.corner_bl[1] + 2), fill='red')
-    imgdraw.ellipse((piece.corner_br[0], piece.corner_br[1],
-                     piece.corner_br[0] + 2, piece.corner_br[1] + 2), fill='blue')
+    # imgdraw.ellipse((piece.corner_bl[0], piece.corner_bl[1],
+    #                  piece.corner_bl[0] + 2, piece.corner_bl[1] + 2), fill='red')
+    # imgdraw.ellipse((piece.corner_br[0], piece.corner_br[1],
+    #                  piece.corner_br[0] + 2, piece.corner_br[1] + 2), fill='blue')
     bbox = piece.bbox
     label = piece.label
     score = piece.score
     shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
-    imgdraw.rectangle(shape)
-    imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
+    imgdraw.rectangle(shape, outline=(0, 0, 255))
+    imgdraw.text((bbox[0], bbox[1]), get_name(char_dataset.categories, label), fill=(0, 0, 0))
     # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(round(score.item(), 3)))
 
-image.show()
+
+image.show('feh {}')
