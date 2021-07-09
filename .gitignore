@@ -6,4 +6,6 @@ valid
 train
 test
 
-model_*
+*model*
+
+*png*
