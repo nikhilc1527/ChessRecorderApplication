@@ -167,6 +167,11 @@ char_dataset_test = ChessDataset('train/', '_characters_annotations.coco.json', 
 # dataset = PennFudanDataset('PennFudanPed', get_transform(train=True))
 # dataset_test = PennFudanDataset('PennFudanPed', get_transform(train=False))
 
+# for i in range(len(char_dataset)):
+#     a = char_dataset[i][1]
+#     del a['masks']
+#     print(a)
+
 # split the dataset in train and test set
 torch.manual_seed(1)
 indices = torch.randperm(len(dataset)).tolist()
@@ -178,7 +183,7 @@ torch.manual_seed(2)
 char_indices = torch.randperm(len(char_dataset)).tolist()
 char_indices_test = torch.randperm(len(char_dataset_test)).tolist()
 char_dataset_ = torch.utils.data.Subset(char_dataset, char_indices[1:])
-char_dataset_test_ = torch.utils.data.Subset(char_dataset_test, char_indices_test)
+char_dataset_test_ = torch.utils.data.Subset(char_dataset_test, char_indices_test[:1])
 
 # define training and validation data loaders
 data_loader = torch.utils.data.DataLoader(
@@ -251,9 +256,9 @@ model2.load_state_dict(torch.load(
 #     # evaluate on the test dataset
 #     evaluate(model2, char_data_loader_test, device=device)
 
-torch.save(model2.state_dict(), 'char_model_{}epoch_statedict'.format(num_epochs2))
+# torch.save(model2.state_dict(), 'char_model_{}epoch_statedict'.format(num_epochs2))
 
-ind = 1
+ind = 0
 # for i in range(len(char_dataset_test)):
 #     print('{}: {}'.format(i, len(char_dataset_test[i][1]['labels'])))
 #     if len(char_dataset_test[i][1]['labels']) > len(char_dataset_test[ind][1]['labels']):
@@ -284,6 +289,7 @@ for bbox, label in zip(obj['boxes'], obj['labels']):
 
 
 img_path = char_dataset_test.get_path(ind)
+print(img_path)
 
 
 def pil_to_cv(img):
@@ -349,11 +355,6 @@ def cluster_points(points):
 cv_img = cv2.imread(img_path)
 edges = canny_edge(cv_img)
 
-plt.subplot(121), plt.imshow(cv_img, cmap='gray')
-plt.title('Original Image'), plt.xticks([]), plt.yticks([])
-plt.subplot(122), plt.imshow(edges, cmap='gray')
-plt.title('Edge Image'), plt.xticks([]), plt.yticks([])
-
 hough_lines = hough_line(edges)
 h_lines, v_lines = h_v_lines(hough_lines)
 intersections = line_intersections(h_lines, v_lines)
@@ -388,6 +389,15 @@ for line in v_lines:
 # print(h_lines)
 
 # print(len(intersections))
+class Point:
+    def __init__(self, x=0, y=0):
+        self.x = x
+        self.y = y
+
+
+points = []
+for x_val, y_val in zip(x, y):
+    points.append((x_val, y_val))
 
 
 class Piece:
@@ -404,6 +414,11 @@ class Piece:
 pieces = []
 image = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
 imgdraw = ImageDraw.Draw(image)
+
+for point in points:
+    width = 4
+    imgdraw.ellipse(((point[0] - width/2, point[1] - width/2), (point[0] + width/2, point[1] + width/2)), fill='red')
+
 for bbox, label, score in zip(prediction[0]['boxes'], prediction[0]['labels'],
                               prediction[0]['scores']):
     # if score < 0.3:
@@ -412,6 +427,8 @@ for bbox, label, score in zip(prediction[0]['boxes'], prediction[0]['labels'],
     # imgdraw.rectangle(shape)
     # imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
     # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(score))
+    print(bbox)
+    print(score)
 
     bl = [bbox[0], bbox[3]]
     br = [bbox[2], bbox[3]]
@@ -462,4 +479,4 @@ for piece in pieces:
     # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(round(score.item(), 3)))
 
 
-image.show('feh {}')
+image.show()
