@@ -18,13 +18,16 @@ import json
 import torch
 from torch import nn
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor# , FastRCNNOutputLayers
 import cv2
-
+from d2go.export.api import convert_and_export_predictor
+from d2go.export.d2_meta_arch import patch_d2_meta_arch
+from d2go.runner import create_runner, GeneralizedRCNNRunner
+from d2go.model_zoo import model_zoo
 
 class MyViewer(PIL.ImageShow.UnixViewer):
     def get_command_ex(self, file, **options):
-        command = executable = "feh"
+        command = executable = "sxiv"
         return command, executable
 
 
@@ -103,7 +106,7 @@ class ChessDataset(torch.utils.data.Dataset):
         return len(self.obj['images'])
 
     def get_path(self, idx):
-        img_obj = self.obj['images'][self.annotations[idx]['image_id']]
+        img_obj = self.obj['images'][idx]
         img_name = img_obj['file_name']
         return os.path.join(self.root, img_name)
 
@@ -127,23 +130,28 @@ class MLP(nn.Module):
 
 def get_instance_segmentation_model(num_classes):
     # load an instance segmentation model pre-trained on COCO
-    model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+    # model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
+    cfg_name = 'faster_rcnn_fbnetv3a_dsmask_C4.yaml'
+    model = model_zoo.get(cfg_name, trained=True)
 
     # get the number of input features for the classifier
-    in_features = model.roi_heads.box_predictor.cls_score.in_features
+    # in_features = model.roi_heads.box_predictor.cls_score.in_features
     # replace the pre-trained head with a new one
-    model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
-    model.roi_heads.position_predictor = MLP()
+    # model.roi_heads.box_predictor = FastRCNNOutputLayers(in_features, num_classes)
+    model.roi_heads.box_predictor.cls_score.out_features = num_classes
+    # model.roi_heads.position_predictor = MLP()
     # model.roi_heads.box_predictor2 = FastRCNNPredictor(in_features, num_classes2)
 
     # now get the number of input features for the mask classifier
-    in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    hidden_layer = 256
+    # in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
+    # hidden_layer = 256
     # and replace the mask predictor with a new one
-    model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
-                                                       hidden_layer,
-                                                       num_classes)
+    # model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
+    #                                                    hidden_layer,
+    #                                                    num_classes)
 
+    print(model)
+    # exit(0)
     return model
 
 
@@ -240,25 +248,25 @@ lr_scheduler2 = torch.optim.lr_scheduler.StepLR(optimizer2,
 # number of epochs to train for
 num_epochs = 20
 # if os.path.isfile('./model_{}epoch_statedict'.format(num_epochs)):
-model.load_state_dict(torch.load(
-    './model_{}epoch_statedict'.format(num_epochs), map_location=device))
+# model.load_state_dict(torch.load(
+#     './model_{}epoch_statedict'.format(num_epochs), map_location=device))
 
 num_epochs2 = 3
-model2.load_state_dict(torch.load(
-    './char_model_{}epoch_statedict'.format(num_epochs2), map_location=device))
+# model2.load_state_dict(torch.load(
+#     './char_model_{}epoch_statedict'.format(num_epochs2), map_location=device))
 # else:
-# for epoch in range(num_epochs2):
-#     # train for one epoch, printing every 10 iterations
-#     train_one_epoch(model2, optimizer2, char_data_loader,
-#                     device, epoch, print_freq=1)
-#     # update the learning rate
-#     lr_scheduler2.step()
-#     # evaluate on the test dataset
-#     evaluate(model2, char_data_loader_test, device=device)
+for epoch in range(num_epochs2):
+    # train for one epoch, printing every 10 iterations
+    train_one_epoch(model, optimizer, char_data_loader,
+                    device, epoch, print_freq=1)
+    # update the learning rate
+    lr_scheduler2.step()
+    # evaluate on the test dataset
+    evaluate(model2, char_data_loader_test, device=device)
 
 # torch.save(model2.state_dict(), 'char_model_{}epoch_statedict'.format(num_epochs2))
 
-ind = 0
+ind = 3
 # for i in range(len(char_dataset_test)):
 #     print('{}: {}'.format(i, len(char_dataset_test[i][1]['labels'])))
 #     if len(char_dataset_test[i][1]['labels']) > len(char_dataset_test[ind][1]['labels']):
@@ -270,8 +278,11 @@ img, obj = char_dataset_test[ind]
 # put the model in evaluation mode
 model2.eval()
 with torch.no_grad():
-    prediction = model2([img.to(device)])
+    chars_prediction = model2([img.to(device)])
 
+model.eval()
+with torch.no_grad():
+    pieces_prediction = model([img.to(device)])
 
 def get_name(categories, id):
     for c in categories:
@@ -291,6 +302,9 @@ for bbox, label in zip(obj['boxes'], obj['labels']):
 img_path = char_dataset_test.get_path(ind)
 print(img_path)
 
+pieces = []
+image = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
+imgdraw = ImageDraw.Draw(image)
 
 def pil_to_cv(img):
     return cv2.cvtColor(numpy.array(img), cv2.COLOR_RGB2BGR)
@@ -411,32 +425,131 @@ class Piece:
         self.score = score
 
 
-pieces = []
-image = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
-imgdraw = ImageDraw.Draw(image)
-
-for point in points:
-    width = 4
-    imgdraw.ellipse(((point[0] - width/2, point[1] - width/2), (point[0] + width/2, point[1] + width/2)), fill='red')
-
-for bbox, label, score in zip(prediction[0]['boxes'], prediction[0]['labels'],
-                              prediction[0]['scores']):
+for bbox, label, score in zip(chars_prediction[0]['boxes'], chars_prediction[0]['labels'],
+                              chars_prediction[0]['scores']):
     # if score < 0.3:
     #   continue
     # shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
     # imgdraw.rectangle(shape)
     # imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
     # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(score))
-    print(bbox)
-    print(score)
+    # print(bbox)
+    # print(score)
 
-    bl = [bbox[0], bbox[3]]
-    br = [bbox[2], bbox[3]]
+    lb = [bbox[0], bbox[3]]
+    rb = [bbox[2], bbox[3]]
     closest_br, closest_bl = -1, -1
     min_br, min_bl = 1e9, 1e9
     for point in clusterpoints:
-        br_dist = math.sqrt((br[0] - point[0])**2 + (br[1] - point[1])**2)
-        bl_dist = math.sqrt((bl[0] - point[0])**2 + (bl[1] - point[1])**2)
+        br_dist = math.sqrt((rb[0] - point[0])**2 + (rb[1] - point[1])**2)
+        bl_dist = math.sqrt((lb[0] - point[0])**2 + (lb[1] - point[1])**2)
+        if br_dist < min_br:
+            min_br = br_dist
+            closest_br = point
+        if bl_dist < min_bl:
+            min_bl = bl_dist
+            closest_bl = point
+
+    new_piece = Piece(label=label, bbox=bbox, corner_bl=closest_bl, corner_br=closest_br, score=score)
+    pieces.append(new_piece)
+
+# filter out all of same piece/different labels, keeping only maximum score for each square
+piece_dict = {}
+for i in range(len(pieces)):
+    piece = pieces[i]
+    if (piece.corner_bl, piece.corner_br) in piece_dict:
+        if piece_dict[(piece.corner_bl, piece.corner_br)].score < piece.score:
+            piece_dict[(piece.corner_bl, piece.corner_br)] = piece
+    else:
+        piece_dict[(piece.corner_bl, piece.corner_br)] = piece
+
+# print(piece_dict)
+
+pieces = []
+for piece in piece_dict:
+    pieces.append(piece_dict[piece])
+    # print(piece)
+
+new_points = []
+
+for point in points:
+    lt = False
+    rt = False
+    lb = False
+    rb = False
+    for piece in pieces:
+        if lt and rt and lb and rb:
+            break
+        piece = piece.bbox
+        # print(piece)
+        if piece[0].item() < point[0] and piece[1].item() < point[1]:
+            lt = True
+        if piece[0].item() < point[0] and piece[3].item() > point[1]:
+            lb = True
+        if piece[2].item() > point[0] and piece[1].item() < point[1]:
+            rt = True
+        if piece[2].item() > point[0] and piece[3].item() > point[1]:
+            rb = True
+    if lt and rt and lb and rb:
+        new_points.append(point)
+
+points = new_points
+del new_points
+
+
+bottom_row = points.copy()
+bottom_row.sort(key=lambda x: x[1], reverse=True)
+bottom_row = bottom_row[0:7]
+
+left_row = points.copy()
+left_row.sort(key=lambda x: x[0], reverse=False)
+left_row = left_row[0:7]
+
+top_row = points.copy()
+top_row.sort(key=lambda x: x[1], reverse=False)
+top_row = top_row[0:7]
+
+right_row = points.copy()
+right_row.sort(key=lambda x: x[0], reverse=True)
+right_row = right_row[0:7]
+
+for point in points:
+    width = 4
+    imgdraw.ellipse(((point[0] - width/2, point[1] - width/2), (point[0] + width/2, point[1] + width/2)), fill='red')
+
+for piece in pieces:
+    # imgdraw.ellipse((piece.corner_bl[0], piece.corner_bl[1],
+    #                  piece.corner_bl[0] + 2, piece.corner_bl[1] + 2), fill='red')
+    # imgdraw.ellipse((piece.corner_br[0], piece.corner_br[1],
+    #                  piece.corner_br[0] + 2, piece.corner_br[1] + 2), fill='blue')
+    bbox = piece.bbox
+    label = piece.label
+    score = piece.score
+    shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
+    imgdraw.rectangle(shape, outline=(0, 0, 255))
+    imgdraw.text((bbox[0], bbox[1]), get_name(char_dataset.categories, label), fill=(0, 0, 0))
+    # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(round(score.item(), 3)))
+
+# ------------------------------------------------------------------------------------------------------------------------
+
+for bbox, label, score in zip(pieces_prediction[0]['boxes'], pieces_prediction[0]['labels'],
+                              pieces_prediction[0]['scores']):
+    # if score < 0.3:
+    #   continue
+    # shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
+    # imgdraw.rectangle(shape)
+    # imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
+    # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(score))
+    # print(bbox)
+    # print(score)
+
+    lb = [bbox[0], bbox[3]]
+    rb = [bbox[2], bbox[3]]
+    closest_br, closest_bl = -1, -1
+    min_br, min_bl = 1e9, 1e9
+    for point in clusterpoints:
+        br_dist = math.sqrt((rb[0] - point[0])**2 + (rb[1] - point[1])**2)
+        bl_dist = math.sqrt((lb[0] - point[0])**2 + (lb[1] - point[1])**2)
         if br_dist < min_br:
             min_br = br_dist
             closest_br = point
@@ -458,12 +571,12 @@ for i in range(len(pieces)):
     else:
         piece_dict[(piece.corner_bl, piece.corner_br)] = piece
 
-print(piece_dict)
+# print(piece_dict)
 
 pieces = []
 for piece in piece_dict:
     pieces.append(piece_dict[piece])
-    print(piece)
+    # print(piece)
 
 for piece in pieces:
     # imgdraw.ellipse((piece.corner_bl[0], piece.corner_bl[1],
@@ -477,6 +590,5 @@ for piece in pieces:
     imgdraw.rectangle(shape, outline=(0, 0, 255))
     imgdraw.text((bbox[0], bbox[1]), get_name(char_dataset.categories, label), fill=(0, 0, 0))
     # imgdraw.text((bbox[0] + 20, bbox[1] + 20), str(round(score.item(), 3)))
-
 
 image.show()
