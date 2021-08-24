@@ -3,4 +3,7 @@
 #
 # These are explicitly windows files and should use crlf
 *.bat           text eol=crlf
-
+models filter=lfs diff=lfs merge=lfs -text
+models/best.pt filter=lfs diff=lfs merge=lfs -text
+models/char_model_5epoch_statedict filter=lfs diff=lfs merge=lfs -text
+models/model_20epoch_statedict filter=lfs diff=lfs merge=lfs -text
