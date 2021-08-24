@@ -11,19 +11,25 @@ from PIL import Image, ImageDraw
 import transforms as T
 import utils
 import torchvision
-import os
+# import os
 import torch.utils.data
-import glob
-import json
+# import glob
+# import json
 import torch
-from torch import nn
-from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-from torchvision.models.detection.faster_rcnn import FastRCNNPredictor# , FastRCNNOutputLayers
+# from torch import nn
+# from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
+# from torchvision.models.detection.faster_rcnn import FastRCNNPredictor  # , FastRCNNOutputLayers
 import cv2
-from d2go.export.api import convert_and_export_predictor
-from d2go.export.d2_meta_arch import patch_d2_meta_arch
-from d2go.runner import create_runner, GeneralizedRCNNRunner
-from d2go.model_zoo import model_zoo
+# from d2go.export.api import convert_and_export_predictor
+# from d2go.export.d2_meta_arch import patch_d2_meta_arch
+# from d2go.runner import create_runner, GeneralizedRCNNRunner
+# from d2go.model_zoo import model_zoo
+
+# my modules
+from dataset import ChessDataset
+
+import model
+
 
 class MyViewer(PIL.ImageShow.UnixViewer):
     def get_command_ex(self, file, **options):
@@ -34,153 +40,12 @@ class MyViewer(PIL.ImageShow.UnixViewer):
 PIL.ImageShow.register(MyViewer, -1)
 
 
-class ChessDataset(torch.utils.data.Dataset):
-    def __init__(self, root, annotations_name, transforms=None):
-        self.root = root
-        self.transforms = transforms
-        # load all image files, sorting them to
-        # ensure that they are aligned
-        self.imgs = list(sorted(glob.glob(os.path.join(root, "*.jpg"))))
-        with open(os.path.join(root, annotations_name), 'r') as myfile:
-            data = myfile.read()
-
-        self.obj = json.loads(data)
-        self.annotations = self.obj['annotations']
-        self.categories = self.obj['categories']
-        # print(self.categories)
-        # print(self.obj['annotations'][0].keys())
-
-        # get range of indices of annotations for each image
-        self.indices = []
-        # print(self.annotations[0])
-        i, j = 0, 0
-        while i < len(self.annotations):
-            j = i
-            while j < len(self.annotations) and self.annotations[j]['image_id'] is self.annotations[i]['image_id']:
-                j += 1
-            self.indices.append(range(i, j))
-            i = j
-        # print("imgs len:")
-        # print(len(self.imgs))
-        # print(self.indices[len(self.indices)-1])
-        # print(self.indices)
-        # print('indices len:')
-        # print(len(self.indices))
-        # print(len(self.annotations))
-
-    def __getitem__(self, idx):
-        ann_range = self.indices[idx]
-
-        img_obj = self.obj['images'][self.annotations[ann_range.start]
-                                     ['image_id']]
-        img_name = img_obj['file_name']
-        img = Image.open(os.path.join(self.root, img_name))
-
-        target = {}
-        target["boxes"] = torch.as_tensor([([ann['bbox'][0], ann['bbox'][1],
-                                             ann['bbox'][0] + ann['bbox'][2],
-                                             ann['bbox'][1] + ann['bbox'][3]])
-                                           for ann in self.annotations
-                                           [ann_range.start:ann_range.stop]],
-                                          dtype=torch.float32)
-        target["labels"] = torch.tensor(list(
-            ann['category_id'] for ann in self.annotations
-            [ann_range.start:ann_range.stop]), dtype=torch.int64)
-        target["image_id"] = torch.tensor(
-            [self.annotations[ann_range.start]['image_id']])
-        target["area"] = torch.tensor(list(
-            ann['area'] for ann in self.annotations
-            [ann_range.start:ann_range.stop]), dtype=torch.int64)
-        target["iscrowd"] = torch.tensor(list(
-            ann['iscrowd'] for ann in self.annotations
-            [ann_range.start:ann_range.stop]), dtype=torch.int8)
-        target["masks"] = torch.as_tensor(
-            [[[False] * img.height] * img.width] * len(ann_range), dtype=torch.uint8)
-
-        if self.transforms is not None:
-            img, target = self.transforms(img, target)
-
-        return img, target
-
-    def __len__(self):
-        return len(self.obj['images'])
-
-    def get_path(self, idx):
-        img_obj = self.obj['images'][idx]
-        img_name = img_obj['file_name']
-        return os.path.join(self.root, img_name)
-
-
-class MLP(nn.Module):
-    def __init__(self):
-        super().__init__()
-        self.layers = nn.Sequential(
-            nn.Flatten(),
-            nn.Linear(32 * 32 * 3, 64),
-            nn.ReLU(),
-            nn.Linear(64, 32),
-            nn.ReLU(),
-            nn.Linear(32, 10)
-        )
-
-    def forward(self, x):
-        '''Forward pass'''
-        return self.layers(x)
-
-
-def get_instance_segmentation_model(num_classes):
-    # load an instance segmentation model pre-trained on COCO
-    # model = torchvision.models.detection.maskrcnn_resnet50_fpn(pretrained=True)
-    cfg_name = 'faster_rcnn_fbnetv3a_dsmask_C4.yaml'
-    model = model_zoo.get(cfg_name, trained=True)
-
-    # get the number of input features for the classifier
-    # in_features = model.roi_heads.box_predictor.cls_score.in_features
-    # replace the pre-trained head with a new one
-    # model.roi_heads.box_predictor = FastRCNNOutputLayers(in_features, num_classes)
-    model.roi_heads.box_predictor.cls_score.out_features = num_classes
-    # model.roi_heads.position_predictor = MLP()
-    # model.roi_heads.box_predictor2 = FastRCNNPredictor(in_features, num_classes2)
-
-    # now get the number of input features for the mask classifier
-    # in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
-    # hidden_layer = 256
-    # and replace the mask predictor with a new one
-    # model.roi_heads.mask_predictor = MaskRCNNPredictor(in_features_mask,
-    #                                                    hidden_layer,
-    #                                                    num_classes)
-
-    print(model)
-    # exit(0)
-    return model
-
-
-def get_transform(train):
-    transforms = []
-    # converts the image, a PIL image, into a PyTorch Tensor
-    transforms.append(T.ToTensor())
-    if train:
-        # during training, randomly flip the training images
-        # and ground-truth for data augmentation
-        transforms.append(T.RandomHorizontalFlip(0.5))
-    return T.Compose(transforms)
-
-
 # use our dataset and defined transformations
 dataset = ChessDataset('train/', '_annotations.coco.json', get_transform(train=True))
 dataset_test = ChessDataset('valid/', '_annotations.coco.json', get_transform(train=False))
 char_dataset = ChessDataset('train/', '_characters_annotations.coco.json', get_transform(train=True))
 char_dataset_test = ChessDataset('train/', '_characters_annotations.coco.json', get_transform(train=False))
-# PennFudanPed
-# dataset = PennFudanDataset('PennFudanPed', get_transform(train=True))
-# dataset_test = PennFudanDataset('PennFudanPed', get_transform(train=False))
 
-# for i in range(len(char_dataset)):
-#     a = char_dataset[i][1]
-#     del a['masks']
-#     print(a)
-
-# split the dataset in train and test set
 torch.manual_seed(1)
 indices = torch.randperm(len(dataset)).tolist()
 indices_test = torch.randperm(len(dataset_test)).tolist()
@@ -193,7 +58,6 @@ char_indices_test = torch.randperm(len(char_dataset_test)).tolist()
 char_dataset_ = torch.utils.data.Subset(char_dataset, char_indices[1:])
 char_dataset_test_ = torch.utils.data.Subset(char_dataset_test, char_indices_test[:1])
 
-# define training and validation data loaders
 data_loader = torch.utils.data.DataLoader(
     dataset_, batch_size=2, shuffle=True, num_workers=0,
     collate_fn=utils.collate_fn)
@@ -210,16 +74,11 @@ char_data_loader_test = torch.utils.data.DataLoader(
     char_dataset_test_, batch_size=1, shuffle=False, num_workers=0,
     collate_fn=utils.collate_fn)
 
-# device = torch.device(
-#     'cuda') if torch.cuda.is_available() else torch.device('cpu')
 device = torch.device('cpu')
-# device = torch.device('cuda')
 
-# our dataset has two classes only - background and person
 num_classes = 14
 num_classes2 = 18
 
-# get the model using our helper function
 model = get_instance_segmentation_model(num_classes)
 model2 = get_instance_segmentation_model(num_classes2)
 # move model to the right device
