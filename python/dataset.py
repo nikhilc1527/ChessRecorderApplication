@@ -3,7 +3,6 @@ import torch.utils.data
 import glob
 import json
 import torch
-from torch import nn
 from PIL import Image
 
 
