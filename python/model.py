@@ -60,10 +60,10 @@ def get_transform(train):
 
 
 
-def setup_model(ChessDataset):
+def setup_model(ChessDataset, root: str, ann_name: str):
     # use our dataset and defined transformations
-    dataset = ChessDataset('../train/', '_annotations.coco.json', get_transform(train=True))
-    dataset_test = ChessDataset('../valid/', '_annotations.coco.json', get_transform(train=False))
+    dataset = ChessDataset('%s/train/' % (root), ann_name, get_transform(train=True))
+    dataset_test = ChessDataset('%s/valid/' % (root), ann_name, get_transform(train=False))
 
     torch.manual_seed(1)
     indices = torch.randperm(len(dataset)).tolist()

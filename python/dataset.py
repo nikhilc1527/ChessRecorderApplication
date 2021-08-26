@@ -24,7 +24,6 @@ class ChessDataset(torch.utils.data.Dataset):
 
         # get range of indices of annotations for each image
         self.indices = []
-        # print(self.annotations[0])
         i, j = 0, 0
         while i < len(self.annotations):
             j = i
@@ -32,13 +31,6 @@ class ChessDataset(torch.utils.data.Dataset):
                 j += 1
             self.indices.append(range(i, j))
             i = j
-        # print("imgs len:")
-        # print(len(self.imgs))
-        # print(self.indices[len(self.indices)-1])
-        # print(self.indices)
-        # print('indices len:')
-        # print(len(self.indices))
-        # print(len(self.annotations))
 
     def __getitem__(self, idx):
         ann_range = self.indices[idx]
@@ -81,5 +73,3 @@ class ChessDataset(torch.utils.data.Dataset):
         img_obj = self.obj['images'][idx]
         img_name = img_obj['file_name']
         return os.path.join(self.root, img_name)
-
-

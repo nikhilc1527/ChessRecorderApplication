@@ -68,7 +68,7 @@ def cluster_points(points):
     return sorted(list(clusters), key=lambda k: [k[1], k[0]])
 
 
-def grid_points(img_path, ind, obj, dataset, dataset_test):
+def grid_points(img_path):
     cv_img = cv2.imread(img_path)
     edges = canny_edge(cv_img)
 
