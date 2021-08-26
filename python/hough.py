@@ -41,7 +41,7 @@ def h_v_lines(lines):
             v_lines.append([rho, theta])
         else:
             h_lines.append([rho, theta])
-            return h_lines, v_lines
+    return h_lines, v_lines
 
 
 def line_intersections(h_lines, v_lines):
@@ -53,7 +53,7 @@ def line_intersections(h_lines, v_lines):
             b = np.array([r_h, r_v])
             inter_point = np.linalg.solve(a, b)
             points.append(inter_point)
-            return np.array(points)
+    return np.array(points)
 
 def cluster_points(points):
     dists = spatial.distance.pdist(points)
@@ -62,18 +62,21 @@ def cluster_points(points):
     cluster_dict = defaultdict(list)
     for i in range(len(flat_clusters)):
         cluster_dict[flat_clusters[i]].append(points[i])
-        cluster_values = cluster_dict.values()
-        clusters = map(lambda arr: (np.mean(np.array(arr)[:, 0]), np.mean(
-            np.array(arr)[:, 1])), cluster_values)
-        return sorted(list(clusters), key=lambda k: [k[1], k[0]])
+    cluster_values = cluster_dict.values()
+    clusters = map(lambda arr: (np.mean(np.array(arr)[:, 0]), np.mean(
+        np.array(arr)[:, 1])), cluster_values)
+    return sorted(list(clusters), key=lambda k: [k[1], k[0]])
 
 
-def hough(img, img_path, ind, obj, dataset, dataset_test):
+def grid_points(img_path, ind, obj, dataset, dataset_test):
     cv_img = cv2.imread(img_path)
     edges = canny_edge(cv_img)
 
     hough_lines = hough_line(edges)
+    print(hough_lines)
     h_lines, v_lines = h_v_lines(hough_lines)
+    print(h_lines)
+    print(v_lines)
     intersections = line_intersections(h_lines, v_lines)
     clusterpoints = cluster_points(intersections)
 

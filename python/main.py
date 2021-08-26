@@ -56,6 +56,10 @@ with torch.no_grad():
 
 import hough
 
+img_path = dataset_test.get_path(ind)
+
+x, y, clusterpoints = hough.grid_points(img_path, ind, obj, dataset, dataset_test)
+
 def get_name(categories, id):
     for c in categories:
         if c['id'] == id:
@@ -65,15 +69,10 @@ def get_name(categories, id):
 
 image = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
 imgdraw = ImageDraw.Draw(image)
-for bbox, label in zip(obj['boxes'], obj['labels']):
-    shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
-    imgdraw.rectangle(shape)
-    imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
-
-    img_path = dataset_test.get_path(ind)
-    print(img_path)
-
-    image = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
+# for bbox, label in zip(obj['boxes'], obj['labels']):
+#     shape = [(bbox[0], bbox[1]), (bbox[2], bbox[3])]
+#     imgdraw.rectangle(shape)
+#     imgdraw.text((bbox[0], bbox[1]), get_name(dataset.categories, label))
 
 
 class Point:
@@ -103,6 +102,7 @@ pieces = []
 for point in points:
     width = 4
     imgdraw.ellipse(((point[0] - width/2, point[1] - width/2), (point[0] + width/2, point[1] + width/2)), fill='red')
+
 
 for bbox, label, score in zip(prediction[0]['boxes'], prediction[0]['labels'],
                               prediction[0]['scores']):

@@ -2,12 +2,12 @@ from engine import train_one_epoch, evaluate
 import transforms as T
 import utils
 import torchvision
-# import os
+import os
 import torch.utils.data
-# import glob
-# import json
 import torch
 from torch import nn
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
 
 
 class MLP(nn.Module):
@@ -33,6 +33,7 @@ def get_instance_segmentation_model(num_classes):
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     # replace the pre-trained head with a new one
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
+    model.roi_heads.position_predictor = MLP()
 
     # now get the number of input features for the mask classifier
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
@@ -42,7 +43,7 @@ def get_instance_segmentation_model(num_classes):
                                                        hidden_layer,
                                                        num_classes)
 
-    print(model)
+    # print(model)
     # exit(0)
     return model
 
@@ -61,8 +62,8 @@ def get_transform(train):
 
 def setup_model(ChessDataset):
     # use our dataset and defined transformations
-    dataset = ChessDataset('train/', '_annotations.coco.json', get_transform(train=True))
-    dataset_test = ChessDataset('valid/', '_annotations.coco.json', get_transform(train=False))
+    dataset = ChessDataset('../train/', '_annotations.coco.json', get_transform(train=True))
+    dataset_test = ChessDataset('../valid/', '_annotations.coco.json', get_transform(train=False))
 
     torch.manual_seed(1)
     indices = torch.randperm(len(dataset)).tolist()
@@ -98,18 +99,18 @@ def setup_model(ChessDataset):
 
     # number of epochs to train for
     num_epochs = 20
-    # if os.path.isfile('./model_{}epoch_statedict'.format(num_epochs)):
-    # model.load_state_dict(torch.load(
-    #     './model_{}epoch_statedict'.format(num_epochs), map_location=device))
+    if os.path.isfile('../models/model_{}epoch_statedict'.format(num_epochs)):
+        model.load_state_dict(torch.load(
+            '../models/model_{}epoch_statedict'.format(num_epochs), map_location=device))
 
-    # else:
-    for epoch in range(num_epochs):
-        # train for one epoch, printing every 10 iterations
-        train_one_epoch(model, optimizer, data_loader,
-                        device, epoch, print_freq=1)
-        # update the learning rate
-        lr_scheduler.step()
-        # evaluate on the test dataset
-        evaluate(model, data_loader_test, device=device)
+    else:
+        for epoch in range(num_epochs):
+            # train for one epoch, printing every 10 iterations
+            train_one_epoch(model, optimizer, data_loader,
+                            device, epoch, print_freq=1)
+            # update the learning rate
+            lr_scheduler.step()
+            # evaluate on the test dataset
+            evaluate(model, data_loader_test, device=device)
 
     return model, dataset, dataset_test
