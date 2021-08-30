@@ -4,29 +4,33 @@ import subprocess
 import os
 import sys
 import diff
+import main
 # sys.path.insert(0, '../python/diff.py')
 
 app = Flask(__name__)
 api = Api(app)
 
+pos_num = 0
+
 
 @api.resource("/position")
 class Position(Resource):
     def post(self):
+        global pos_num
         png_file = request.files['file']
-        print(request)
-        print(png_file)
         filename = '/tmp/{}'.format(png_file.filename)
         png_file.save(filename)
+        pos = main.run(filename, pos_num=pos_num)
+        pos_num += 1
         filesize = subprocess.run(["du", "-hs", filename], stdout=subprocess.PIPE).stdout.decode("utf-8").split()[0]
-        return {"file size": filesize, "input": "png file of image of board", "output": "64 underscore-separated numbers for representation of board", "position": "rnbqkbnrXppppppppXzzzzzzzzXzzzzzzzzXzzzzzzzzXzzzzzzzzXPPPPPPPPXRNBQKBNR"}
+        return {"file size": filesize, "input": "png file of image of board", "output": "64 underscore-separated numbers for representation of board", "position": pos}
 
 
 @api.resource("/diff_<string:prev_pos>_<string:cur_pos>")
 class Diff(Resource):
     def get(self, prev_pos, cur_pos):
-        diffs = diff.diff(prev_pos, cur_pos)
-        return {"position1": "%s,%s" % (diffs[0][0], diffs[0][1]), "position2": "%s,%s" % (diffs[1][0], diffs[1][1])}
+        pos1, pos2 = diff.diff(prev_pos, cur_pos)
+        return {"position1": pos1, "position2": pos2}
 
 
 @api.resource("/save")

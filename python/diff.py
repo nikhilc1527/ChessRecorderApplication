@@ -13,19 +13,22 @@ output/return: the two positions where the position has changed
 
 
 def diff(last_pos: str, cur_pos: str):
-    rows1 = last_pos.split("X")
-    rows2 = cur_pos.split("X")
     d1 = (-1, -1)
     d1complete = False
     d2 = (-1, -1)
+    def ind(i, j):
+        return i*8 + j
     for i in range(8):
-        if not(rows1[i] == rows2[i]):
-            for j in range(8):
-                if not(rows1[i][j] == rows2[i][j]):
-                    if not d1complete:
-                        d1 = (i+1, j+1)
-                        d1complete = True
-                    else:
-                        d2 = (i+1, j+1)
+        for j in range(8):
+            if last_pos[ind(i, j)] != cur_pos[ind(i, j)]:
+                if d1complete:
+                    d2 = (i, j)
+                else:
+                    d1complete = True
+                    d1 = (i, j)
 
-    return d1, d2
+    if not d1complete:
+        return "--"
+    pos1 = "%s%s" % (chr(ord("a")+d1[0]), d1[1]+1)
+    pos2 = "%s%s" % (chr(ord("a")+d2[0]), d2[1]+1)
+    return pos1, pos2

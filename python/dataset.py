@@ -7,12 +7,15 @@ from PIL import Image
 
 
 class ChessDataset(torch.utils.data.Dataset):
-    def __init__(self, root, annotations_name, transforms=None):
+    def __init__(self, root, annotations_name, transforms=None, imgpath = None):
         self.root = root
         self.transforms = transforms
         # load all image files, sorting them to
         # ensure that they are aligned
-        self.imgs = list(sorted(glob.glob(os.path.join(root, "*.jpg"))))
+        if imgpath:
+            self.imgs = list(imgpath)
+        else:
+            self.imgs = list(sorted(glob.glob(os.path.join(root, "*.jpg"))))
         with open(os.path.join(root, annotations_name), 'r') as myfile:
             data = myfile.read()
 
@@ -39,6 +42,36 @@ class ChessDataset(torch.utils.data.Dataset):
                                      ['image_id']]
         img_name = img_obj['file_name']
         img = Image.open(os.path.join(self.root, img_name))
+
+        target = {}
+        target["boxes"] = torch.as_tensor([([ann['bbox'][0], ann['bbox'][1],
+                                             ann['bbox'][0] + ann['bbox'][2],
+                                             ann['bbox'][1] + ann['bbox'][3]])
+                                           for ann in self.annotations
+                                           [ann_range.start:ann_range.stop]],
+                                          dtype=torch.float32)
+        target["labels"] = torch.tensor(list(
+            ann['category_id'] for ann in self.annotations
+            [ann_range.start:ann_range.stop]), dtype=torch.int64)
+        target["image_id"] = torch.tensor(
+            [self.annotations[ann_range.start]['image_id']])
+        target["area"] = torch.tensor(list(
+            ann['area'] for ann in self.annotations
+            [ann_range.start:ann_range.stop]), dtype=torch.int64)
+        target["iscrowd"] = torch.tensor(list(
+            ann['iscrowd'] for ann in self.annotations
+            [ann_range.start:ann_range.stop]), dtype=torch.int8)
+        target["masks"] = torch.as_tensor(
+            [[[False] * img.height] * img.width] * len(ann_range), dtype=torch.uint8)
+
+        if self.transforms is not None:
+            img, target = self.transforms(img, target)
+
+        return img, target
+
+    def get_dummy(self, imgpath):
+        ann_range = range(0, 1)
+        img = Image.open(imgpath)
 
         target = {}
         target["boxes"] = torch.as_tensor([([ann['bbox'][0], ann['bbox'][1],

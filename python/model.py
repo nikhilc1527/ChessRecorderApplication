@@ -59,8 +59,7 @@ def get_transform(train):
     return T.Compose(transforms)
 
 
-
-def setup_model(ChessDataset, root: str, ann_name: str):
+def setup_model(ChessDataset, root: str, ann_name: str, model_name, num_classes, num_epochs):
     # use our dataset and defined transformations
     dataset = ChessDataset('%s/train/' % (root), ann_name, get_transform(train=True))
     dataset_test = ChessDataset('%s/valid/' % (root), ann_name, get_transform(train=False))
@@ -81,7 +80,7 @@ def setup_model(ChessDataset, root: str, ann_name: str):
 
     device = torch.device('cpu')
 
-    num_classes = 14
+    # num_classes = 14
 
     model = get_instance_segmentation_model(num_classes)
     model.to(device)
@@ -98,10 +97,12 @@ def setup_model(ChessDataset, root: str, ann_name: str):
                                                    gamma=0.1)
 
     # number of epochs to train for
-    num_epochs = 20
-    if os.path.isfile('../models/model_{}epoch_statedict'.format(num_epochs)):
+    # num_epochs = 20
+    print('../models/{}model_{}epoch_statedict'.format(model_name, num_epochs))
+    if os.path.isfile('../models/{}model_{}epoch_statedict'.format(model_name, num_epochs)):
         model.load_state_dict(torch.load(
-            '../models/model_{}epoch_statedict'.format(num_epochs), map_location=device))
+            '../models/{}model_{}epoch_statedict'.format(model_name, num_epochs), map_location=device))
+        print("loaded model")
 
     else:
         for epoch in range(num_epochs):

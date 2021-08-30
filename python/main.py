@@ -1,35 +1,15 @@
-import PIL.ImageShow
-# from engine import train_one_epoch, evaluate
-import math
-# import numpy as np
-# from collections import defaultdict
-# import scipy.cluster as cluster
-# import scipy.spatial as spatial
-# from matplotlib import pyplot as plt
-# import numpy
-from PIL import Image, ImageDraw
-# import transforms as T
-# import utils
-# import torchvision
-# import os
-import torch
-import torch.utils.data
-# import glob
-# import json
-import torch
-# from torch import nn
-# from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-# from torchvision.models.detection.faster_rcnn import FastRCNNPredictor  # , FastRCNNOutputLayers
-# import cv2
-# from d2go.export.api import convert_and_export_predictor
-# from d2go.export.d2_meta_arch import patch_d2_meta_arch
-# from d2go.runner import create_runner, GeneralizedRCNNRunner
-# from d2go.model_zoo import model_zoo
+#!/bin/env python3
+
+import PIL
+from PIL import ImageShow, Image
+import random
 
 # my modules
 from dataset import ChessDataset
 
 import model
+import hough
+import apply_model
 
 
 class MyViewer(PIL.ImageShow.UnixViewer):
@@ -40,28 +20,33 @@ class MyViewer(PIL.ImageShow.UnixViewer):
 
 PIL.ImageShow.register(MyViewer, -1)
 
-piece_model, piece_dataset, piece_dataset_test = model.setup_model(ChessDataset, '..', '_annotations.coco.json')
-char_model, char_dataset, char_dataset_test = model.setup_model(ChessDataset, '..', '_characters_annotations.coco.json')
+piece_model, piece_dataset, piece_dataset_test = model.setup_model(ChessDataset, '..', '_annotations.coco.json', "piece_", 14, 20)
+char_model, char_dataset, char_dataset_test = model.setup_model(ChessDataset, '..', '_characters_annotations.coco.json', "char_", 18, 5)
 
-# torch.save(model2.state_dict(), 'char_model_{}epoch_statedict'.format(num_epochs2))
 
-ind = 3
+def run(img_path, ind=None, pos_num=None):
 
-img_path = piece_dataset_test.get_path(ind)
+    # img = Image.open(img_path)
+    if ind:
+        img, _ = piece_dataset_test[ind]
+    else:
+        img, _ = piece_dataset_test.get_dummy(img_path)
 
-# pick one image from the test set
-img, _ = piece_dataset_test[ind]
-# img = Image.open(img_path)
+    points, pieces, chars = apply_model.apply_model(piece_model, char_model, img_path, img)
 
-# EVERYTHING AFTER THIS IS GOING ------------------------------------------------------------------------
+    img2 = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
 
-import apply_model
-# imgdraw = ImageDraw.Draw(image)
+    # apply_model.draw(img2, points, pieces, piece_dataset)
+    # apply_model.draw_points(img2, chars)
 
-points, pieces = apply_model.apply_model(piece_model, char_model, img_path, img)
+    pos = hough.get_position(chars, pieces, img2, pos_num)
 
-img2 = Image.fromarray(img.mul(255).permute(1, 2, 0).byte().numpy())
+    apply_model.draw_points(img2, points, 'orange')
 
-apply_model.draw(img2, points, pieces, piece_dataset)
+    img2.show()
 
-img2.show()
+    return pos
+
+
+if __name__ == "__main__":
+    run(piece_dataset_test.get_path(random.randint(0,60)))
