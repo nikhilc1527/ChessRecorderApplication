@@ -48,7 +48,8 @@ def run(img_path, ind=None):
 
 
 if __name__ == "__main__":
-    i = random.randint(0, 60)
-    # i = 4
+    # i = random.randint(0, 60)
+    i = 30
     print(i)
-    run(piece_dataset_test.get_path(i))
+    # run(piece_dataset_test.get_path(i))
+    run("../valid/05ad7223827a29a8283f6c4b2490f52f_jpg.rf.7c134acea5ef5e18aa75defc069dc1ee.jpg")
