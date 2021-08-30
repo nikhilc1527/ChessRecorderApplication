@@ -118,57 +118,35 @@ def get_slope(p1, p2):
 
 
 # returns index where the slope diverges too much
-def get_line(points, p=False):
+def get_line(points):
     threshold = 5
-    if p:
-        threshold = 10
-    # first_slope = get_slope(points[0], points[1])
-    # first_angle = math.atan(first_slope) * 180 / math.pi
     total_angle = math.atan2(points[0][1] - points[1][1], points[0][0] - points[1][0]) * 180 / math.pi
-    # while total_angle < -45:
-    #     total_angle += 90
+
     avg_angle = total_angle
     total = 1
 
-    print("avg_angle: %s" % (avg_angle))
+    print("starting_angle: %s" % (avg_angle))
 
     ret = len(points)
     for i in range(1, len(points)-1):
-        # slope = get_slope(points[i], points[i+1])
-        # angle = math.atan(slope) * 180 / math.pi
         angle = math.atan2(points[i][1] - points[i+1][1], points[i][0] - points[i+1][0]) * 180 / math.pi
-        # while angle < 135:
-        #     angle += 90
-
-        # print(angle)
 
         if abs(avg_angle - angle) > threshold and abs(avg_angle - (180+angle)) > threshold:
             ret = i + 1
-            # first_angle = (first_angle * i + angle) / (i+1)
-            # total_angle += angle
-            # avg_angle = total_angle / i
             break
         else:
-            # first_angle = (first_angle * i + angle) / (i+1)
-            if abs(avg_angle - angle) < threshold:
-                total_angle += angle
-                total += 1
-                avg_angle = total_angle / (total)
-            # avg_angle = math.atan2(points[i+1][1]-points[0][1], points[i+1][0]-points[0][0])
-            # print("angle: " + str(angle))
-            # print("avg angle: " + str(avg_angle))
-            pass
+            if abs(avg_angle - (180+angle)) < threshold:
+                angle += 180
+            total_angle += angle
+            total += 1
+            avg_angle = total_angle / (total)
 
-    # avg_angle = (avg_angle + 180) % 180
-    # if avg_angle < 0:
-    #     avg_angle *= -1
-    #     avg_angle = 180 - avg_angle
-    print('overall angle: %s' % (math.atan2(points[ret-1][1]-points[0][1], points[ret-1][0]-points[0][0])))
-    # first_angle = first_angle / 180 * math.pi
-    return ret, avg_angle
+    overall_angle = math.atan2(points[ret-1][1]-points[0][1], points[ret-1][0]-points[0][0]) * 180 / math.pi
+    overall_angle = (overall_angle+180) % 180
+    return ret, overall_angle
 
 
-def get_position(chars, pieces, points, img):
+def get_position(chars, pieces, points, img, piece_dataset):
     # points: list of tuples of two values (x,y) which are positions of characters
     imgdraw = ImageDraw.Draw(img)
 
@@ -184,12 +162,12 @@ def get_position(chars, pieces, points, img):
     # get top and bottom rows of characters
     chars.sort(key=y_cmp)
 
-    top_break, top_angle = get_line(chars)
-    print("top_angle: %s" % (top_angle))
-    top_row = chars[:top_break]
-    top_row.sort(key=x_cmp)
-    lines.append((top_row, top_angle))
-    chars = chars[top_break:]
+    # top_break, top_angle = get_line(chars)
+    # print("top_angle: %s" % (top_angle))
+    # top_row = chars[:top_break]
+    # # top_row.sort(key=x_cmp)
+    # lines.append((top_row, top_angle))
+    # chars = chars[top_break:]
 
     chars = chars[::-1]
 
@@ -197,7 +175,7 @@ def get_position(chars, pieces, points, img):
     bottom_break, bottom_angle = get_line(chars)
     print("bottom_angle: %s" % (bottom_angle))
     bottom_row = chars[:bottom_break]
-    bottom_row.sort(key=x_cmp)
+    # bottom_row.sort(key=x_cmp)
     lines.append((bottom_row, bottom_angle))
     chars = chars[bottom_break:]
 
@@ -208,7 +186,7 @@ def get_position(chars, pieces, points, img):
                                       )
     print("left_angle: %s" % (left_angle))
     left_col = chars[:left_break]
-    left_col.sort(key=y_cmp)
+    # left_col.sort(key=y_cmp)
     lines.append((left_col, left_angle))
     chars = chars[left_break:]
 
@@ -218,7 +196,7 @@ def get_position(chars, pieces, points, img):
                                         )
     print("right_angle: %s" % (right_angle))
     right_col = chars[:right_break]
-    right_col.sort(key=y_cmp)
+    # right_col.sort(key=y_cmp)
     lines.append((right_col, right_angle))
     chars = chars[right_break:]
 
@@ -226,7 +204,7 @@ def get_position(chars, pieces, points, img):
     # sort by x value, go through chars while slope is staying same
 
     print('displaying')
-    apply_model.draw_points(img, top_row, 'yellow')
+    # apply_model.draw_points(img, top_row, 'yellow')
     apply_model.draw_points(img, bottom_row, 'green')
     apply_model.draw_points(img, left_col, 'red')
     apply_model.draw_points(img, right_col, 'magenta')
@@ -242,30 +220,51 @@ def get_position(chars, pieces, points, img):
         for i in range(len(line)):
             line[i] = (int(line[i][0]), int(line[i][1]))
 
-    for line in lines:
+    for line in lines[0:2]:
+        theta = line[1] / 180 * math.pi
         x = line[0][0][0]
         y = line[0][0][1]
         x1 = 0
-        y1 = y + x * math.tan(line[1] / 180 * math.pi)
-        y2 = line[0][1][1]
-        x2 = x + y / math.tan(line[1] / 180 * math.pi)
+        y1 = math.tan(theta)*(x1-x)+y
+        x2 = 450
+        y2 = math.tan(theta)*(x2-x)+y
         # imgdraw.line([line[0][0][0], line[0][0][1], line[0][-1][0], line[0][-1][1]])
-        imgdraw.line([x, y, x2, y2])
+        print("{}".format([x, y, x1, y1, x2, y2]))
+        imgdraw.line([x1, y1, x2, y2])
+
+    for line in lines[2:4]:
+        theta = line[1] / 180 * math.pi
+        x = line[0][0][0]
+        y = line[0][0][1]
+        y1 = 0
+        x1 = (y1-y)/math.tan(theta) + x
+        y2 = 450
+        x2 = (y2-y)/math.tan(theta) + x
+        # imgdraw.line([line[0][0][0], line[0][0][1], line[0][-1][0], line[0][-1][1]])
+        print("{}".format([x, y, x1, y1, x2, y2]))
+        imgdraw.line([x1, y1, x2, y2])
 
     i = 0
+    target = 2
+
     while i < len(points):
-        if i >= len(points):
-            break
         point = points[i]
         hits = 0
         for line in lines:
             first_point = line[0][0]
             angle = line[1]
-            if (point[0] - first_point[0]) < \
-               ((point[1] - first_point[1]) / math.tan(angle * math.pi / 180)):
+            theta = angle / 180 * math.pi
+            X = points[i][0]
+            Y = points[i][1]
+            x = first_point[0]
+            y = first_point[1]
+            x2 = x + (Y-y)/math.tan(theta)
+            y2 = Y
+
+            if x2 > X:
                 hits += 1
         imgdraw.text(point, str(hits))
-        if not(hits == 1):
+        if not(hits == target):
             del points[i]
             i -= 1
 
@@ -289,13 +288,43 @@ def get_position(chars, pieces, points, img):
     points.sort(key=x_cmp)
     # first index in points is bottom left corner of board
 
+    apply_model.draw_points(img, points, 'orange')
+
+    apply_model.draw_points(img, [points[0]], 'magenta')
+
+    label_map = {
+        2: "b",
+        3: "k",
+        4: "n",
+        5: "p",
+        6: "q",
+        7: "r",
+        8: "B",
+        9: "K",
+        10: "N",
+        11: "P",
+        12: "Q",
+        13: "R"
+    }
+
     bottom_left_point = points[0]
-    position = ''
+    position = []
     for i in range(64):
-        position += 'z'
+        position.append(ord('z'))
     for piece in pieces:
         dist_x = int(round(abs(piece.corner_bl[0] - bottom_left_point[0]) / avg_dist))
         dist_y = int(round(abs(piece.corner_bl[1] - bottom_left_point[1]) / avg_dist))
+        print(abs(piece.corner_bl[0] - bottom_left_point[0]) / avg_dist)
+        print(abs(piece.corner_bl[1] - bottom_left_point[1]) / avg_dist)
         imgdraw.text([piece.bbox[0], piece.bbox[1]], '(%s, %s)' % (dist_x, dist_y))
+        try:
+            position[(8-(dist_y-1))*8+dist_x-1] = ord(label_map[int(piece.label)])
+        except:
+            pass
 
-    return "rnbqkbnrppppppppzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzPPPPPPPPRNBQKBNR"
+    final_pos = ''
+    for i in position:
+        final_pos += chr(i)
+
+    # return "rnbqkbnrppppppppzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzPPPPPPPPRNBQKBNR"
+    return final_pos

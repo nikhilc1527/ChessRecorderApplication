@@ -1,8 +1,10 @@
+# from dotenv import load_dotenv
+# load_dotenv()
+
 from flask import Flask
 from flask_restful import Api, Resource, request
 import subprocess
 import os
-import sys
 import diff
 import main
 # sys.path.insert(0, '../python/diff.py')
@@ -16,7 +18,10 @@ class Position(Resource):
     def post(self, pos_num):
         png_file = request.files['file']
         filename = '/tmp/{}'.format(png_file.filename)
+        filename2 = '/tmp/2.{}'.format(png_file.filename)
         png_file.save(filename)
+        os.system("ffmpeg -i {} -vf scale={}:{} {}".format(filename, 416, 416, filename2))
+        filename = filename2
         pos = main.run(filename)
         filesize = subprocess.run(["du", "-hs", filename], stdout=subprocess.PIPE).stdout.decode("utf-8").split()[0]
         return {"file size": filesize, "input": "png file of image of board", "output": "64 underscore-separated numbers for representation of board", "position": pos}

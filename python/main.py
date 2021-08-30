@@ -3,6 +3,7 @@
 import PIL
 from PIL import ImageShow, Image
 import random
+import sys
 
 # my modules
 from dataset import ChessDataset
@@ -38,9 +39,9 @@ def run(img_path, ind=None):
     # apply_model.draw(img2, points, pieces, piece_dataset)
     # apply_model.draw_points(img2, chars)
 
-    pos = hough.get_position(chars, pieces, points, img2)
+    pos = hough.get_position(chars, pieces, points, img2, piece_dataset)
 
-    apply_model.draw_points(img2, points, 'orange')
+    # apply_model.draw_points(img2, points, 'orange')
 
     img2.show()
 
@@ -49,7 +50,14 @@ def run(img_path, ind=None):
 
 if __name__ == "__main__":
     # i = random.randint(0, 60)
-    i = 30
-    print(i)
-    # run(piece_dataset_test.get_path(i))
-    run("../valid/05ad7223827a29a8283f6c4b2490f52f_jpg.rf.7c134acea5ef5e18aa75defc069dc1ee.jpg")
+    if len(sys.argv) > 1:
+        path = sys.argv[1]
+    else:
+        i = 3
+        print(i)
+        path = piece_dataset_test.get_path(i)
+        print(path)
+
+    # print(run(piece_dataset_test.get_path(i)))
+    # run("../valid/0b2252c93c53e1b2e61d485b22328e2e_jpg.rf.0a885b88adc72caa71b0aa0ec20b863e.jpg")
+    run(path)
