@@ -18,3 +18,7 @@ build
 
 #ignore models
 models/
+
+ignored/
+
+yolov5_dataset_pieces
