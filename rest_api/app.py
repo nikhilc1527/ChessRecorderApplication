@@ -10,18 +10,14 @@ import main
 app = Flask(__name__)
 api = Api(app)
 
-pos_num = 0
 
-
-@api.resource("/position")
+@api.resource("/position_<int:pos_num>")
 class Position(Resource):
-    def post(self):
-        global pos_num
+    def post(self, pos_num):
         png_file = request.files['file']
         filename = '/tmp/{}'.format(png_file.filename)
         png_file.save(filename)
-        pos = main.run(filename, pos_num=pos_num)
-        pos_num += 1
+        pos = main.run(filename)
         filesize = subprocess.run(["du", "-hs", filename], stdout=subprocess.PIPE).stdout.decode("utf-8").split()[0]
         return {"file size": filesize, "input": "png file of image of board", "output": "64 underscore-separated numbers for representation of board", "position": pos}
 

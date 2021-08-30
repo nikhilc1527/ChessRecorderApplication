@@ -24,8 +24,7 @@ piece_model, piece_dataset, piece_dataset_test = model.setup_model(ChessDataset,
 char_model, char_dataset, char_dataset_test = model.setup_model(ChessDataset, '..', '_characters_annotations.coco.json', "char_", 18, 5)
 
 
-def run(img_path, ind=None, pos_num=None):
-
+def run(img_path, ind=None):
     # img = Image.open(img_path)
     if ind:
         img, _ = piece_dataset_test[ind]
@@ -39,7 +38,7 @@ def run(img_path, ind=None, pos_num=None):
     # apply_model.draw(img2, points, pieces, piece_dataset)
     # apply_model.draw_points(img2, chars)
 
-    pos = hough.get_position(chars, pieces, img2, pos_num)
+    pos = hough.get_position(chars, pieces, points, img2)
 
     apply_model.draw_points(img2, points, 'orange')
 
@@ -49,4 +48,7 @@ def run(img_path, ind=None, pos_num=None):
 
 
 if __name__ == "__main__":
-    run(piece_dataset_test.get_path(random.randint(0,60)))
+    i = random.randint(0, 60)
+    # i = 4
+    print(i)
+    run(piece_dataset_test.get_path(i))

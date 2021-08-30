@@ -134,16 +134,16 @@ def get_line(points, p=False):
             print(angle)
 
         if abs(first_angle - angle) > threshold and abs(first_angle - (180+angle)) > threshold:
-            ret = i
+            ret = i + 1
+            first_angle = (first_angle * i + angle) / (i+1)
             break
         else:
             first_angle = (first_angle * i + angle) / (i+1)
-    return ret
+    return ret, first_angle
 
 
-def get_position(points, pieces, img, pos_num=None):
+def get_position(chars, pieces, points, img):
     # points: list of tuples of two values (x,y) which are positions of characters
-    points = points.copy()
     imgdraw = ImageDraw.Draw(img)
 
     def x_cmp(a):
@@ -153,59 +153,52 @@ def get_position(points, pieces, img, pos_num=None):
         return a[1]
 
     # get top and bottom rows of characters
-    points.sort(key=y_cmp)
+    chars.sort(key=y_cmp)
 
-    top_break = get_line(points) + 1
-    print(top_break)
-    top_row = points[:top_break]
-    print(top_row)
-    points = points[top_break:]
+    top_break, top_angle = get_line(chars)
+    top_row = chars[:top_break]
+    top_row.sort(key=x_cmp)
+    chars = chars[top_break:]
 
-    points = points[::-1]
+    chars = chars[::-1]
 
     # get bottom row as largest y values
-    bottom_break = get_line(points)
-    bottom_row = points[:bottom_break]
-    points = points[bottom_break:]
+    bottom_break, bottom_angle = get_line(chars)
+    bottom_row = chars[:bottom_break]
+    bottom_row.sort(key=x_cmp)
+    chars = chars[bottom_break:]
 
     # get left and right columns the same way
-    points.sort(key=x_cmp)
+    chars.sort(key=x_cmp)
 
-    left_break = get_line(points, True)
-    left_col = points[:left_break]
-    points = points[left_break:]
+    left_break, left_angle = get_line(chars, True)
+    left_col = chars[:left_break]
+    left_col.sort(key=y_cmp)
+    chars = chars[left_break:]
 
-    points = points[::-1]
+    chars = chars[::-1]
 
-    right_break = get_line(points, True)
-    right_col = points[:right_break]
-    points = points[right_break:]
+    right_break, right_angle = get_line(chars, True)
+    right_col = chars[:right_break]
+    right_col.sort(key=y_cmp)
+    chars = chars[right_break:]
 
-    # go through bottom points, while slope is staying same. do same for top points.
-    # sort by x value, go through points while slope is staying same
+    # go through bottom chars, while slope is staying same. do same for top chars.
+    # sort by x value, go through chars while slope is staying same
 
     print('displaying')
     apply_model.draw_points(img, top_row, 'yellow')
     apply_model.draw_points(img, bottom_row, 'green')
     apply_model.draw_points(img, left_col, 'red')
     apply_model.draw_points(img, right_col, 'magenta')
-    apply_model.draw_points(img, points, 'blue')
+    apply_model.draw_points(img, chars, 'blue')
 
-    poses = ["rnbqkbnrppppppppzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzPPPPPPPPRNBQKBNR",
-             "rnbqkbnrppppppppzzzzzzzzzzzzzzzzzzzPzzzzzzzzzzzzPPPPzPPPRNBQKBNR",
-             "rnbqkbnrppzpppppzzzzzzzzzzpzzzzzzzzPzzzzzzzzzzzzPPPPzPPPRNBQKBNR",
-             "rnbqkbnrppzpppppzzzzzzzzzzpzzzzzzzzPzzzzzzzzzNzzPPPPzPPPRNBQKBzR",
-             "rnbqkbnrppzzppppzzzpzzzzzzpzzzzzzzzPzzzzzzzzzNzzPPPPzPPPRNBQKBzR",
-             "rnbqkbnrppzzppppzzzpzzzzzzpzzzzzzzzPPzzzzzzzzNzzPPPzzPPPRNBQKBzR",
-             "rnbqkbnrppzzppppzzzpzzzzzzzzzzzzzzzPpzzzzzzzzNzzPPPzzPPPRNBQKBzR",
-             "rnbqkbnrppzzppppzzzpzzzzzzzzzzzzzzzPNzzzzzzzzzzzPPPzzPPPRNBQKBzR",
-             "rzbqkbnrppzzppppzznpzzzzzzzzzzzzzzzPNzzzzzzzzzzzPPPzzPPPRNBQKBzR",
-             "rzbqkbnrppzzppppzznpzzzzzzzzzzzzzzzPNzzzzzNzzzzzPPPzzPPPRzBQKBzR"]
+    # imgdraw.line([int(top_row[0][0]), int(top_row[0][1]), int(top_row[-1][0]), int(top_row[-1][1])])
+    # imgdraw.line([int(bottom_row[0][0]), int(bottom_row[0][1]), int(bottom_row[-1][0]), int(bottom_row[-1][1])])
+    # imgdraw.line([int(left_col[0][0]), int(left_col[0][1]), int(left_col[-1][0]), int(left_col[-1][1])])
+    # imgdraw.line([int(right_col[0][0]), int(right_col[0][1]), int(right_col[-1][0]), int(right_col[-1][1])])
 
-    if not pos_num:
-        return "rnbqkbnrppppppppzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzPPPPPPPPRNBQKBNR"
-    else:
-        return poses[pos_num]
+    return "rnbqkbnrppppppppzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzzPPPPPPPPRNBQKBNR"
 
 
 # def get_position(points, pieces, img, imgpath=None):
